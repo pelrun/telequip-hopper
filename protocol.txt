@@ -1,0 +1,37 @@
+For CX25:
+
+C\0x00	EnableSound
+C\0x09	DisableSound
+C\0x0A	GetInventoryStatus
+C\0x1B	RebootMachine
+C\0x7F	GetHopperConfiguration
+C0	ClearRollerPulseData
+C1	GetRollerData
+CU	SetHopperConfiguration AUS01
+CV	SetHopperConfiguration USA04
+Ca	GetLowCoinStatus
+Cc	ClearHistory
+Cd	GetLastDispense
+Ce	GetMachineErrors
+Cg	GetSerialNumber
+C[h-p]	GetHistory X (skip Cm)
+Cm	GetDispenseBelowValue
+Cq	GetFaultByHopper
+Cr	ResetMachineStatus
+Cs	GetMachineStatus
+Ct	GetPIDNumber
+Cu	GetExtendedMachineErrors
+Cv	GetFirmwareRevision
+Cw	GetBootloaderRevision
+Cx	GetCoinDefIniRevision
+Cy	UpdateLowCoinStatus
+Cz	GetRealtimeCoinSensorStatus
+C{n}	DispenseByAmount
+H{#h%n}	SetHistory
+M{n}	SetDispenseBelowValue
+P{h}	DispenseByHopper
+S{n}	SpinByBin
+
+{	STX
+}	ETX followed by checksum byte (all bytes XORed plus 1)
+
