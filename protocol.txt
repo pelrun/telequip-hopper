@@ -1,4 +1,5 @@
 For CX25:
+0x01 report:
 
 C\0x00	EnableSound
 C\0x09	DisableSound
@@ -34,4 +35,11 @@ S{n}	SpinByBin
 
 {	STX
 }	ETX followed by checksum byte (all bytes XORed plus 1)
+
+0x02 report:
+
+0x16	EnterSetupMode (responds with eeprom size?)
+0x46	ExitSetupMode
+0x2b<start><len>	read eeprom block
+0x23<pos><byte>		write eeprom byte
 

@@ -1,5 +1,7 @@
 """ Telequip coin hopper driver"""
 
+from struct import pack
+
 class Hopper(object):
 
     _STX = "\x02"
@@ -44,8 +46,9 @@ class Hopper(object):
     def __init__(self, device, isCX25=True, debug=False):
         self.isCX25 = isCX25
         self.device = device
-        self.statusbyte = 0
-        self.debug = debug 
+        self.statusbyte = 'P'
+        self.debug = debug
+        self.inSetupMode = False
 
     def checksum(self, text):
         """Calculate checksum for hoppers."""
@@ -72,38 +75,75 @@ class Hopper(object):
                     coindispensed=bool(s&32)
                    )
 
-    def sendcommand(self, command=None, parameter=None):
+
+    def sendrawcommand(self, rawcmd):
+        self.device.write(rawcmd)
+
+        if self.debug:
+            print "Sent: ", list(rawcmd)
+
+        result = self.device.read(59).rstrip("\x00")
+
+        if self.debug:
+            print "Read: ", list(result)
+
+        return result
+
+    def sendcommand(self, command, parameter=None, expectStatus=True):
         """Send command to hopper and return the response."""
-        cmdstring = self._commands.get(command,'')
-        if cmdstring == '':
-            return None
+        cmdstring = self._commands.get(command,command)
 
         if parameter is None:
             rawcmd = "\x01" + self._EOT + cmdstring + self._ENQ
         else:
             rawcmd = "\x01" + self._EOT + cmdstring + self._STX + str(parameter) + self._ETX + self.checksum(parameter)
 
-        self.device.write(rawcmd)
-        result = self.device.read(59).rstrip("\x00")
-
         if self.debug:
             print "Command: {}({})".format(command,parameter)
-            print "Sent: ", list(rawcmd)
-            print "Read: ", list(result)
 
-        self.statusbyte = result[1]
+        result = self.sendrawcommand(rawcmd)
+
+        if expectStatus:
+            if ord(result[1])&0x40:
+                self.statusbyte = result[1]
+            elif ord(result[2])&0x40:
+                self.statusbyte = result[2]
+
         if result[1] == self._STX:
             return result[2:result.find(self._ETX,2)]
         else:
             return result[2] == self._ACK
 
-    def getLowCoinStatus(self):
-        reply = self.sendcommand('GetLowCoinStatus')
-        return [bool(x=='1') for x in list("{:08b}".format(ord(reply[0])))]
+    def enterSetupMode(self):
+        result = self.sendrawcommand("\x02\x16")
+        self.inSetupMode = True
+        return result[1]
+
+    def exitSetupMode(self):
+        result = self.sendrawcommand("\x02\x45")
+        self.inSetupMode = False
+        return result[1]
+
+    def readEeprom(self,address,length=0x2a):
+        if not self.inSetupMode or address > 0xff or length > 0x2a:
+            return False
+        result = self.sendrawcommand(pack('4B',0x02,0x2b,address,length))
+        return result[2:length+2]
+
+    def writeEeprom(self, address, byte):
+        if not self.inSetupMode or address > 0xFF or byte > 0xFF:
+            return False
+        return self.sendrawcommand("\x02\x23"+chr(address)+chr(byte))
+
+    @property
+    def lowCoinStatus(self):
+        reply = self.sendcommand('GetLowCoinStatus', expectStatus=False)
+        data = ord(reply[0]) | (ord(reply[1])<<4)
+        return [bool(x=='1') for x in list("{:08b}".format(data))]
 
     @property
     def serialNumber(self):
-        reply = self.sendcommand('GetSerialNumber')
+        reply = self.sendcommand('GetSerialNumber', expectStatus=False)
         return reply
 
     def reset(self):
@@ -131,14 +171,17 @@ class Hopper(object):
 
     @property
     def dispenseBelowValue(self):
-        return self.sendcommand('GetDispenseBelowValue')
+        return self.sendcommand('GetDispenseBelowValue',expectStatus=False)
 
     @dispenseBelowValue.setter
     def dispenseBelowValue(self, value):
         result = self.sendcommand('SetDispenseBelowValue', value)
 
-"""
+    @property
+    def history(self):
+        return [self.sendcommand("C"+chr(104+column),expectStatus=False) for column in range(0,9) if column != 5]
 
+""" 
 Canister Not present
 Canister was removed 
 Coins exit blocked.
@@ -159,11 +202,18 @@ if __name__ == "__main__":
     f = open("/dev/coinhopper0","r+b")
     h = Hopper(f,debug=True)
 
-    h.reset()
-    print h.sensorStatus
-    #print h.statusbyte
-    #print h.status
+    #print h.sensorStatus
+    #print h.machineStatus
+    #print h.lowCoinStatus
+    #print h.dispenseBelowValue
+    #print h.getFaultByHopper()
     #print h.serialNumber
-    #h.dispense(80)
+    #h.reset()
+    #h.dispense(10)
     #print h.status
-
+    #print h.history
+    #try:
+    #    h.enterSetupMode()
+    #    print list(h.readEeprom(0x2a))
+    #finally:
+    #    h.exitSetupMode()
